@@ -14,6 +14,7 @@
 
 let with_lock = Xapi_stdext_threads.Threadext.Mutex.execute
 
+open Xapi_stdext_pervasives.Pervasiveext
 open Rrdd_shared
 open Rrd_interface
 
@@ -455,6 +456,30 @@ let query_host_ds (ds_name : string) : float =
       | Some rrdi ->
           query ds_name rrdi
   )
+
+(** Dump all latest data of host dss to file in json format so that any client
+    can read even if it's non-privileged user, such as NRPE. *)
+let dump_host_dss_to_file (file : string) : unit =
+  let json =
+    with_lock mutex (fun () ->
+        match !host_rrd with
+        | None ->
+            `Assoc []
+        | Some rrdi ->
+            `Assoc
+              (Rrd.ds_names rrdi.rrd
+              |> List.map (fun ds_name -> (ds_name, `Float (query ds_name rrdi)))
+              )
+    )
+    |> Yojson.Basic.to_string
+    |> Bytes.of_string
+  in
+  let fd =
+    Unix.openfile file [Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT] 0o644
+  in
+  finally
+    (fun () -> ignore (Unix.write fd json 0 (Bytes.length json)))
+    (fun () -> ignore (Unix.close fd))
 
 (** {add_vm_ds vm_uuid domid ds_name} enables collection of the data produced by
     the data sourced with name {ds_name} for the VM {vm_uuid} into a time series

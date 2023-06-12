@@ -775,6 +775,11 @@ let monitor_write_loop writers =
               with_lock Rrdd_shared.last_loop_end_time_m (fun _ ->
                   Rrdd_shared.last_loop_end_time := Unix.gettimeofday ()
               ) ;
+
+              (* Dump to /dev/shm/metrics/host-dss *)
+              let path = Rrdd_server.Plugin.get_path "host-dss" in
+              Rrdd_server.dump_host_dss_to_file path ;
+
               Thread.delay !Rrdd_shared.timeslice
             with _ ->
               debug
